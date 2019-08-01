@@ -252,6 +252,8 @@ public final class Compiler {
     private String dexCacheDir;
     private boolean hasSecondDex = false; // True if classes2.dex should be added to the APK
     private boolean hasThirdDex = false; // True if classes3.dex should be added to the APK
+    private boolean hasFourthDex = false;
+    private boolean hasFifthDex = false;
 
     private JSONArray simpleCompsBuildInfo;
     private JSONArray extCompsBuildInfo;
@@ -1105,6 +1107,12 @@ public final class Compiler {
             if (hasThirdDex) {
                 apkBuilder.addFile(new File(dexedClassesDir + File.separator + "classes3.dex"), "classes3.dex");
             }
+            if (hasFourthDex) {
+                apkBuilder.addFile(new File(dexedClassesDir + File.separator + "classes4.dex"), "classes4.dex");
+            }
+            if (hasFifthDex) {
+                apkBuilder.addFile(new File(dexedClassesDir + File.separator + "classes5.dex"), "classes5.dex");
+            }
 
             apkBuilder.sealApk();
             return true;
@@ -1449,6 +1457,8 @@ public final class Compiler {
         List<File> inputList = new ArrayList<File>();
         List<File> class2List = new ArrayList<File>();
         List<File> class3List = new ArrayList<File>();
+        List<File> class4List = new ArrayList<File>();
+        List<File> class5List = new ArrayList<File>();
         inputList.add(classesDir); //this is a directory, and won't be cached into the dex cache
         inputList.add(new File(getResource(SIMPLE_ANDROID_RUNTIME_JAR)));
 
@@ -1490,14 +1500,15 @@ public final class Compiler {
             }
         }
 
+        int libSize = libList.size();
         int offset = libList.size();
         // Note: The choice of 12 libraries is arbitrary. We note that things
         // worked to put all libraries into the first classes.dex file when we
         // had 16 libraries and broke at 17. So this is a conservative number
         // to try.
-        if (!secondTry) {           // First time through, try base + 12 libraries
-            if (offset > 12)
-                offset = 12;
+        if (!secondTry) {           // First time through, try base + 10 libraries
+            if (offset > 10)
+                offset = 10;
         } else {
             offset = 0;               // Add NO libraries the second time through!
         }
@@ -1506,11 +1517,44 @@ public final class Compiler {
             inputList.add(libList.get(i));
         }
 
-        if (libList.size() - offset > 0) { // Any left over for classes2?
-            for (int i = offset; i < libList.size(); i++) {
+        int offset2;
+        if (offset + 18 > libSize) {
+          offset2 = offset + 18;
+        }else {
+          offset2 = libSize;
+        }
+        
+        for (int i = offset; i < offset2; i++) {
+            class2List.add(libList.get(i));
+        }
+
+        int offset3;
+        if (offset2 + 12 > libSize) {
+          offset3 = offset2 + 12;
+        }else {
+          offset3 = libSize;
+        }
+        
+        for (int i = offset2; i < offset3; i++) {
+            class3List.add(libList.get(i));
+        }
+
+        int offset4;
+        if (offset3 + 18 > libSize) {
+          offset4 = offset3 + 18;
+        }else {
+          offset4 = libSize;
+        }
+        
+        for (int i = offset3; i < offset4; i++) {
+            class4List.add(libList.get(i));
+        }
+
+        if (libList.size() - offset > 0) { // Any left over for classes5?
+            for (int i = offset4; i < libList.size(); i++) {
                 if (!(libList.get(i).getName().contains("support-") || libList.get(i).getName().contains("appcompat-")) ) {
-                    // System.out.println("======== classes2 name is:" + libList.get(i).getName());
-                    class2List.add(libList.get(i));
+                    // System.out.println("======== classes5 name is:" + libList.get(i).getName());
+                    class5List.add(libList.get(i));
                 }
             }
         }
@@ -1558,24 +1602,32 @@ public final class Compiler {
         synchronized (SYNC_KAWA_OR_DX) {
             setProgress(50);
             dxSuccess = dexTask.execute(inputList);
-            if (class3List.size() > 0) {
-                dexTask.setOutput(dexedClassesDir + File.separator + "classes3.dex");
-                dxSuccess = dexTask.execute(class3List);
-                hasThirdDex = true;
-            }
-
             if (dxSuccess && class2List.size() > 0 ) {
-                setProgress(60);
+                setProgress(55);
                 dexTask.setOutput(dexedClassesDir + File.separator + "classes2.dex");
                 dxSuccess = dexTask.execute(class2List);
-                setProgress(75);
+                setProgress(60);
                 hasSecondDex = true;
                 if (dxSuccess && class3List.size() > 0) {
-                    setProgress(80);
+                    setProgress(65);
                     dexTask.setOutput(dexedClassesDir + File.separator + "classes3.dex");
                     dxSuccess = dexTask.execute(class3List);
-                    setProgress(82);
+                    setProgress(70);
                     hasThirdDex = true;
+                    if (dxSuccess && class4List.size() > 0) {
+                        setProgress(75);
+                        dexTask.setOutput(dexedClassesDir + File.separator + "classes4.dex");
+                        dxSuccess = dexTask.execute(class4List);
+                        setProgress(78);
+                        hasFourthDex = true;
+                        if (dxSuccess && class5List.size() > 0) {
+                            setProgress(80);
+                            dexTask.setOutput(dexedClassesDir + File.separator + "classes5.dex");
+                            dxSuccess = dexTask.execute(class5List);
+                            setProgress(82);
+                            hasFifthDex = true;
+                        }
+                    }
                 }
             } else if (!dxSuccess) {  // The initial dx blew out, try more conservative
                 LOG.info("DX execution failed, trying with fewer libraries.");
